@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Editor files
+.DS_Store
+
+# Large media files
+photos/
+sounds/*.mp3
+!app/public/*.mp3
