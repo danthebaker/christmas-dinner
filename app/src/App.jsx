@@ -349,6 +349,17 @@ function formatTime(minutes) {
   return `${hrs}h ${mins}m`
 }
 
+function formatCountdown(totalSeconds) {
+  if (totalSeconds <= 0) return '0:00'
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  }
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
 function formatClockTime(date) {
   return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 }
@@ -623,26 +634,46 @@ function playAlarmSound() {
   }
 }
 
+// Send push notification via ntfy
+const NTFY_TOPIC = 'christmas-dinner-dan'
+
+function sendPushNotification(title, message, isUrgent = false) {
+  fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
+    method: 'POST',
+    headers: {
+      'Title': title,
+      'Priority': isUrgent ? 'urgent' : 'high',
+      'Tags': isUrgent ? 'warning,christmas_tree' : 'bell,christmas_tree'
+    },
+    body: message
+  }).catch(e => {
+    console.log('Could not send push notification:', e)
+  })
+}
+
 function App() {
   const [servingTime, setServingTime] = useState(() => {
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    tomorrow.setHours(15, 0, 0, 0)
-    return tomorrow
+    const today = new Date()
+    today.setHours(15, 0, 0, 0)
+    return today
   })
 
   const [currentTime, setCurrentTime] = useState(new Date())
-  const [alertsEnabled, setAlertsEnabled] = useState(false)
+  const [alertsEnabled, setAlertsEnabled] = useState(() => {
+    return localStorage.getItem('alertsEnabled') === 'true'
+  })
   const [notifiedEvents, setNotifiedEvents] = useState(new Set())
   const [selectedRecipeId, setSelectedRecipeId] = useState(null)
   const [testNotificationIndex, setTestNotificationIndex] = useState(null)
   const [activeAlert, setActiveAlert] = useState(null) // For big on-screen alerts
   const [showCookingNow, setShowCookingNow] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   const selectedRecipe = selectedRecipeId ? RECIPES.find(r => r.id === selectedRecipeId) : null
 
   const enableAlerts = () => {
     setAlertsEnabled(true)
+    localStorage.setItem('alertsEnabled', 'true')
     // Show confirmation alert
     setActiveAlert({
       title: '🎄 Alerts Enabled!',
@@ -656,6 +687,11 @@ function App() {
     }
   }
 
+  const disableAlerts = () => {
+    setAlertsEnabled(false)
+    localStorage.setItem('alertsEnabled', 'false')
+  }
+
   const dismissAlert = () => {
     setActiveAlert(null)
     // Stop the alarm sound when dismissed
@@ -665,19 +701,20 @@ function App() {
     }
   }
 
-  // Listen for Enter key to dismiss alerts
+  // Listen for Enter key to dismiss alerts, Escape to exit fullscreen
   useEffect(() => {
-    if (!activeAlert) return
-
     const handleKeyDown = (e) => {
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && activeAlert) {
         dismissAlert()
+      }
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeAlert])
+  }, [activeAlert, isFullscreen])
 
   const testNextNotification = (events) => {
     // First ensure alerts are enabled
@@ -700,10 +737,15 @@ function App() {
     }
 
     const event = events[nextIndex]
+    const testTitle = `TEST ${nextIndex + 1}/${events.length}: ${event.title}`
+    const testBody = `${formatClockTime(event.time)} - ${event.description}`
+
     playAlarmSound() // Play jingle bells
+    sendPushNotification(testTitle, testBody, false) // Send to phone
+
     setActiveAlert({
-      title: `TEST ${nextIndex + 1}/${events.length}: ${event.title}`,
-      description: `${formatClockTime(event.time)} - ${event.description}`,
+      title: testTitle,
+      description: testBody,
       isNow: false
     })
     setTestNotificationIndex(nextIndex)
@@ -712,13 +754,6 @@ function App() {
   const stopTestNotifications = () => {
     setTestNotificationIndex(null)
   }
-
-  // Update time - every second when cooking now modal is open, otherwise every minute
-  useEffect(() => {
-    const interval = showCookingNow ? 1000 : 60000
-    const timer = setInterval(() => setCurrentTime(new Date()), interval)
-    return () => clearInterval(timer)
-  }, [showCookingNow])
 
   // Build schedule for all devices
   const { deviceBlocks, checklistEvents, earliestTime, latestTime, allEvents } = useMemo(() => {
@@ -1048,6 +1083,22 @@ function App() {
     }
   }, [servingTime])
 
+  // Update time every second when actively cooking (past first event), otherwise every minute
+  const [isActivelyCooking, setIsActivelyCooking] = useState(false)
+
+  useEffect(() => {
+    // Check if we're past the first event (cooking has started)
+    const firstEventTime = checklistEvents[0]?.time
+    const cooking = firstEventTime && currentTime >= firstEventTime
+    setIsActivelyCooking(cooking)
+  }, [checklistEvents, currentTime])
+
+  useEffect(() => {
+    const interval = (showCookingNow || isActivelyCooking) ? 1000 : 60000
+    const timer = setInterval(() => setCurrentTime(new Date()), interval)
+    return () => clearInterval(timer)
+  }, [showCookingNow, isActivelyCooking])
+
   // Notifications
   useEffect(() => {
     if (!alertsEnabled) return
@@ -1060,17 +1111,24 @@ function App() {
 
         if (timeDiff > -60000 && timeDiff <= 120000 && !notifiedEvents.has(eventKey)) {
           const isNow = timeDiff <= 0
+          const alertTitle = isNow ? `NOW: ${event.title}` : `Coming up: ${event.title}`
+          const alertBody = event.description + (event.temp ? ` (${event.temp})` : '')
+
           playAlarmSound() // Play jingle bells
+
+          // Send push notification to phone via ntfy
+          sendPushNotification(alertTitle, alertBody, isNow)
+
           // Show big in-app alert
           setActiveAlert({
-            title: isNow ? `🚨 NOW: ${event.title}` : `⏰ Coming up: ${event.title}`,
-            description: event.description + (event.temp ? ` (${event.temp})` : ''),
+            title: isNow ? `🚨 ${alertTitle}` : `⏰ ${alertTitle}`,
+            description: alertBody,
             isNow: isNow
           })
           // Also try browser notification as backup
           if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification(isNow ? `🚨 NOW: ${event.title}` : `⏰ Coming up: ${event.title}`, {
-              body: event.description + (event.temp ? ` (${event.temp})` : ''),
+            new Notification(isNow ? `🚨 ${alertTitle}` : `⏰ ${alertTitle}`, {
+              body: alertBody,
               requireInteraction: true
             })
           }
@@ -1095,6 +1153,13 @@ function App() {
     return currentTime
   }, [testNotificationIndex, allEvents, currentTime])
 
+  // Find the next upcoming event (not in the past)
+  const nextEvent = useMemo(() => {
+    return checklistEvents.find(event => event.time > displayTime)
+  }, [checklistEvents, displayTime])
+
+  // Calculate time until next event (in seconds for live countdown)
+  const secondsUntilNext = nextEvent ? Math.max(0, Math.floor((nextEvent.time - displayTime) / 1000)) : 0
   const timeUntilStart = checklistEvents[0] ? Math.round((checklistEvents[0].time - displayTime) / 60000) : 0
 
   const handleTimeChange = (e) => {
@@ -1183,8 +1248,13 @@ function App() {
               </span>
               {timeUntilStart > 0 ? (
                 <span className="time-until">Start in {formatTime(timeUntilStart)}</span>
+              ) : nextEvent ? (
+                <span className="time-until next-event">
+                  <span className="next-label">Next:</span> {nextEvent.name}
+                  <span className="next-countdown">{formatCountdown(secondsUntilNext)}</span>
+                </span>
               ) : (
-                <span className="time-until late">Started {formatTime(Math.abs(timeUntilStart))} ago</span>
+                <span className="time-until complete">All done!</span>
               )}
             </div>
             <div className="controls-row">
@@ -1196,9 +1266,9 @@ function App() {
               </button>
               <div className="alert-toggle">
                 {alertsEnabled ? (
-                  <div className="alerts-active">
+                  <button className="alerts-active" onClick={disableAlerts} title="Click to disable alerts">
                     <span className="bell-icon">🔔</span> Alerts ON
-                  </div>
+                  </button>
                 ) : (
                   <button className="enable-alerts-btn" onClick={enableAlerts}>
                     🔔 Enable Alerts
@@ -1226,13 +1296,47 @@ function App() {
           </div>
         </section>
 
-        <section className="timeline-section">
-          <h2>Cooking Schedule</h2>
+        <section className={`timeline-section ${isFullscreen ? 'fullscreen' : ''}`}>
+          <div className="timeline-header">
+            <h2>Cooking Schedule</h2>
+            <button
+              className="fullscreen-btn"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            >
+              {isFullscreen ? '✕ Exit' : '⛶ Fullscreen'}
+            </button>
+          </div>
+          {isFullscreen && (
+            <div className="fullscreen-info">
+              <span className="fullscreen-time">
+                {testNotificationIndex !== null ? 'Simulated: ' : ''}
+                {formatClockTime(displayTime)}
+              </span>
+              {timeUntilStart > 0 ? (
+                <span className="fullscreen-until">Start in {formatTime(timeUntilStart)}</span>
+              ) : nextEvent ? (
+                <div className="fullscreen-next">
+                  <span className="fullscreen-next-label">Next:</span>
+                  <span className="fullscreen-next-name">{nextEvent.name}</span>
+                  <span className="fullscreen-next-countdown">{formatCountdown(secondsUntilNext)}</span>
+                </div>
+              ) : (
+                <span className="fullscreen-until complete">All done!</span>
+              )}
+              <button
+                className={`fullscreen-cooking-btn ${cookingNowItems.length > 0 ? 'has-items' : ''}`}
+                onClick={() => setShowCookingNow(true)}
+              >
+                🍳 {cookingNowItems.length > 0 ? cookingNowItems.length : 'None'} cooking
+              </button>
+            </div>
+          )}
           <div className="timeline-container">
             <TimeRuler
               earliestTime={earliestTime}
               latestTime={latestTime}
-              timelineHeight={timelineHeight}
+              timelineHeight={isFullscreen ? window.innerHeight - 140 : timelineHeight}
               currentTime={displayTime}
             />
             <div className="timeline-scroll-area">
@@ -1245,7 +1349,7 @@ function App() {
                     blocks={deviceBlocks[key] || []}
                     earliestTime={earliestTime}
                     latestTime={latestTime}
-                    timelineHeight={timelineHeight}
+                    timelineHeight={isFullscreen ? window.innerHeight - 140 : timelineHeight}
                     currentTemp={key.startsWith('oven-') ? getCurrentOvenTemp() : null}
                     currentTime={displayTime}
                     onBlockClick={setSelectedRecipeId}

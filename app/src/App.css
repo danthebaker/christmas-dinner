@@ -250,6 +250,38 @@ body {
   color: var(--berry);
 }
 
+.time-until.next-event {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  background: var(--gold-dim);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: 50px;
+  color: var(--text-primary);
+}
+
+.time-until.next-event .next-label {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.time-until.next-event .next-countdown {
+  background: var(--berry);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  min-width: 50px;
+  text-align: center;
+}
+
+.time-until.complete {
+  color: var(--pine);
+  background: var(--pine-dim);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: 50px;
+}
+
 .alert-toggle {
   /* Styles handled by controls-row */
 }
@@ -284,6 +316,14 @@ body {
   padding: var(--space-sm) var(--space-md);
   border-radius: 50px;
   border: 1px solid var(--pine);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.alerts-active:hover {
+  background: var(--berry-dim);
+  color: var(--berry);
+  border-color: var(--berry);
 }
 
 /* Controls Row - Alerts + Dry Run inline */
@@ -436,12 +476,19 @@ body {
   margin-bottom: var(--space-xl);
 }
 
+.timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-lg);
+}
+
 .timeline-section h2 {
   font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: var(--space-lg);
+  margin-bottom: 0;
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -450,6 +497,189 @@ body {
 .timeline-section h2::before {
   content: '🎄';
   font-size: 1.2rem;
+}
+
+/* Fullscreen button */
+.fullscreen-btn {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--snow);
+  border: 1px solid var(--border);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.fullscreen-btn:hover {
+  background: var(--card);
+  border-color: var(--pine);
+  color: var(--pine);
+}
+
+/* Fullscreen Mode */
+.timeline-section.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  background: rgba(250, 248, 245, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  margin: 0;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.timeline-section.fullscreen .timeline-header {
+  margin-bottom: var(--space-sm);
+}
+
+.timeline-section.fullscreen h2 {
+  font-size: 1.2rem;
+}
+
+.timeline-section.fullscreen .fullscreen-btn {
+  background: var(--berry);
+  color: white;
+  border-color: var(--berry);
+}
+
+.timeline-section.fullscreen .fullscreen-btn:hover {
+  background: var(--berry-light);
+  border-color: var(--berry-light);
+}
+
+/* Fullscreen info bar */
+.fullscreen-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--card);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-sm);
+  border: 1px solid var(--border);
+}
+
+.fullscreen-time {
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.fullscreen-until {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--pine);
+  background: var(--pine-dim);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: 50px;
+}
+
+.fullscreen-until.cooking {
+  color: white;
+  background: var(--berry);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.fullscreen-until.complete {
+  color: var(--pine);
+  background: var(--pine-dim);
+}
+
+/* Fullscreen next event display */
+.fullscreen-next {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex: 1;
+  background: var(--gold-dim);
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--gold);
+}
+
+.fullscreen-next-label {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.fullscreen-next-name {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.fullscreen-next-countdown {
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  background: var(--berry);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-md);
+  min-width: 70px;
+  text-align: center;
+}
+
+.fullscreen-cooking-btn {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--snow);
+  border: 1px solid var(--border);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.fullscreen-cooking-btn:hover {
+  background: var(--card);
+  border-color: var(--gold);
+}
+
+.fullscreen-cooking-btn.has-items {
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+  color: white;
+  border-color: var(--gold);
+}
+
+.timeline-section.fullscreen .timeline-container {
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-md);
+}
+
+/* In fullscreen, time-ruler should NOT be sticky vertically - it scrolls with content */
+.timeline-section.fullscreen .time-ruler {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.timeline-section.fullscreen .device-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+/* Make scroll area not independently scrollable in fullscreen - parent handles it */
+.timeline-section.fullscreen .timeline-scroll-area {
+  overflow-x: visible;
 }
 
 .timeline-container {
