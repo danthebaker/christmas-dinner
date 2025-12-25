@@ -182,6 +182,21 @@ const RECIPES = [
     ]
   },
   {
+    id: 'boiled-cauliflower',
+    name: 'Boiled Cauliflower',
+    subtitle: 'Florets',
+    cookTime: 10,
+    prepTime: 5,
+    equipment: 'hob-3',
+    setting: 'Boil 8-10 mins',
+    color: '#f5f5dc',
+    instructions: [
+      'Cut cauliflower into florets',
+      'RING 3: Boil in salted water for 8-10 mins until tender (can share pot with carrots)',
+      'Drain well and season with butter, salt & pepper'
+    ]
+  },
+  {
     id: 'stuffing',
     name: 'Sage & Onion Stuffing',
     subtitle: 'Morrisons',
@@ -375,10 +390,69 @@ function getTimePosition(time, earliestTime, latestTime, height) {
   return (timeOffset / totalDuration) * height
 }
 
-function RecipeModal({ recipe, equipment, onClose }) {
+function RecipeModal({ recipe, equipment, scheduleTimes, currentTime, onClose }) {
   if (!recipe) return null
 
   const equipmentInfo = equipment[recipe.equipment]
+  const times = scheduleTimes || {}
+
+  // Calculate time for each instruction step based on content
+  const getStepTime = (stepIndex) => {
+    if (!times.prepStart || !times.cookStart) return null
+
+    const step = recipe.instructions[stepIndex].toLowerCase()
+
+    // Rest-related steps happen at cookEnd
+    if (step.includes('rest') || step.includes('transfer to board') || step.includes('wrap') || step.includes('resting')) {
+      return times.cookEnd
+    }
+
+    // "Remove" or "take out" during cooking means end of cooking
+    if ((step.includes('remove') || step.includes('take out')) && stepIndex > 2) {
+      return times.cookEnd
+    }
+
+    // Steps mentioning cooking settings or putting in oven happen at cookStart
+    if (step.includes('oven') || step.includes('pressure') || step.includes('tendercrisp') ||
+        step.includes('air crisp') || step.includes('°c') || step.includes('ring ') ||
+        step.includes('boil') || step.includes('simmer') || step.includes('drawer')) {
+      return times.cookStart
+    }
+
+    // Everything else is prep - distribute across prep time
+    const prepSteps = recipe.instructions.filter((s, i) => {
+      const lower = s.toLowerCase()
+      return i <= stepIndex &&
+        !lower.includes('oven') && !lower.includes('pressure') && !lower.includes('°c') &&
+        !lower.includes('rest') && !lower.includes('transfer to board') &&
+        !lower.includes('ring ') && !lower.includes('boil') && !lower.includes('drawer')
+    }).length
+
+    const totalPrepSteps = recipe.instructions.filter(s => {
+      const lower = s.toLowerCase()
+      return !lower.includes('oven') && !lower.includes('pressure') && !lower.includes('°c') &&
+        !lower.includes('rest') && !lower.includes('transfer to board') &&
+        !lower.includes('ring ') && !lower.includes('boil') && !lower.includes('drawer')
+    }).length
+
+    if (totalPrepSteps > 0 && prepSteps > 0) {
+      const prepMinutes = recipe.prepTime || 0
+      const minutesPerPrepStep = prepMinutes / totalPrepSteps
+      const stepOffset = (prepSteps - 1) * minutesPerPrepStep
+      return addMinutes(times.prepStart, stepOffset)
+    }
+
+    return times.prepStart
+  }
+
+  // Get countdown for a step time
+  const getCountdown = (stepTime) => {
+    if (!stepTime || !currentTime) return null
+    const diffMs = stepTime - currentTime
+    if (diffMs < 0) return 'done'
+    const diffSeconds = Math.floor(diffMs / 1000)
+    return formatCountdown(diffSeconds)
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -392,6 +466,30 @@ function RecipeModal({ recipe, equipment, onClose }) {
           </div>
         </div>
         <div className="modal-body">
+          <div className="modal-info-row">
+            {times.prepStart && (
+              <div className="modal-info-item">
+                <span className="modal-info-label">Prep At</span>
+                <span className="modal-info-value modal-info-time">{formatClockTime(times.prepStart)}</span>
+              </div>
+            )}
+            <div className="modal-info-item">
+              <span className="modal-info-label">Cook At</span>
+              <span className="modal-info-value modal-info-time">{times.cookStart ? formatClockTime(times.cookStart) : `${recipe.cookTime} mins`}</span>
+            </div>
+            {times.cookEnd && (
+              <div className="modal-info-item">
+                <span className="modal-info-label">Done At</span>
+                <span className="modal-info-value modal-info-time">{formatClockTime(times.cookEnd)}</span>
+              </div>
+            )}
+            {recipe.restTime && times.restEnd && (
+              <div className="modal-info-item">
+                <span className="modal-info-label">Rest Until</span>
+                <span className="modal-info-value modal-info-time">{formatClockTime(times.restEnd)}</span>
+              </div>
+            )}
+          </div>
           <div className="modal-info-row">
             <div className="modal-info-item">
               <span className="modal-info-label">Equipment</span>
@@ -415,9 +513,27 @@ function RecipeModal({ recipe, equipment, onClose }) {
           <div className="modal-instructions">
             <h3>Instructions</h3>
             <ol>
-              {recipe.instructions.map((step, i) => (
-                <li key={i}>{step}</li>
-              ))}
+              {recipe.instructions.map((step, i) => {
+                const stepTime = getStepTime(i)
+                const countdown = getCountdown(stepTime)
+                const isDone = countdown === 'done'
+                return (
+                  <li key={i} className={isDone ? 'step-done' : ''}>
+                    <div className="step-content">
+                      <span className="step-text">{step}</span>
+                      {stepTime && (
+                        <div className="step-timing">
+                          <span className="step-time">{formatClockTime(stepTime)}</span>
+                          {countdown && !isDone && (
+                            <span className="step-countdown">{countdown}</span>
+                          )}
+                          {isDone && <span className="step-done-badge">✓</span>}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
             </ol>
           </div>
         </div>
@@ -756,7 +872,7 @@ function App() {
   }
 
   // Build schedule for all devices
-  const { deviceBlocks, checklistEvents, earliestTime, latestTime, allEvents } = useMemo(() => {
+  const { deviceBlocks, checklistEvents, earliestTime, latestTime, allEvents, recipeTimes } = useMemo(() => {
     const blocks = {
       'oven-top': [],    // Main Oven - Top Shelf
       'oven-middle': [], // Main Oven - Middle Shelf
@@ -772,6 +888,7 @@ function App() {
     }
     const checklist = []
     const events = []
+    const recipeSchedule = {} // Track times for each recipe
 
     // Find items that need resting - they determine when meats must finish
     const meatsWithRest = RECIPES.filter(r => r.restTime && r.restTime > 0 && !r.cookFirst)
@@ -869,6 +986,14 @@ function App() {
       }
 
       prepStart = addMinutes(cookStart, -recipe.prepTime)
+
+      // Store schedule times for this recipe
+      recipeSchedule[recipe.id] = {
+        prepStart,
+        cookStart,
+        cookEnd,
+        restEnd: restTime > 0 ? addMinutes(cookEnd, restTime) : null
+      }
 
       // Track preheat times needed for oven
       if (recipe.equipment.startsWith('oven-')) {
@@ -1079,7 +1204,8 @@ function App() {
       checklistEvents: checklist,
       earliestTime: earliest,
       latestTime: latest,
-      allEvents: events
+      allEvents: events,
+      recipeTimes: recipeSchedule
     }
   }, [servingTime])
 
@@ -1393,6 +1519,8 @@ function App() {
         <RecipeModal
           recipe={selectedRecipe}
           equipment={EQUIPMENT}
+          scheduleTimes={recipeTimes[selectedRecipe.id]}
+          currentTime={displayTime}
           onClose={() => setSelectedRecipeId(null)}
         />
       )}

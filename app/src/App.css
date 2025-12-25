@@ -1338,8 +1338,7 @@ body {
   content: counter(step);
   position: absolute;
   left: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  top: var(--space-sm);
   width: 26px;
   height: 26px;
   background: var(--pine);
@@ -1351,6 +1350,59 @@ body {
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 0.75rem;
+}
+
+/* Step timing display */
+.step-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.step-text {
+  flex: 1;
+}
+
+.step-timing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.step-time {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--pine);
+  background: var(--pine-dim);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.step-countdown {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: white;
+  background: var(--berry);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  min-width: 50px;
+  text-align: center;
+}
+
+.step-done-badge {
+  font-size: 0.9rem;
+  color: var(--pine);
+}
+
+.modal-instructions li.step-done {
+  opacity: 0.5;
+}
+
+.modal-instructions li.step-done::before {
+  background: var(--text-muted);
 }
 
 /* Cooking Now Modal */
